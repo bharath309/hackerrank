@@ -1,105 +1,102 @@
 # https://www.hackerrank.com/challenges/maximise-sum
-import heapq
 import itertools
+import multiprocessing as mp
+import sys
 import unittest
+from fileinput import FileInput
+
+
+class Node(object):
+
+    __slots__ = ['value', 'left', 'right', 'color']
+
+    def __init__(self, value):
+        self.value = value
+        self.left = None
+        self.right = None
+        self.color = True
+
+
+    def flip_colors(self):
+        self.color = not self.color
+        self.left.color = not self.left.color
+        self.right.color = not self.right.color
+
+
+def insert_at(node, value):
+    if node is None:
+        return Node(value)
+
+    if is_red(node.left) and is_red(node.right):
+        node.flip_colors()
+
+    if node.value == value:
+        node.value = value
+    elif node.value < value:
+        node.left = insert_at(node.left, value)
+    else:
+        node.right = insert_at(node.right, value)
+
+
+    if is_red(node.right) and not is_red(node.left):
+        node = rotate_left(node)
+    if is_red(node.left) and is_red(node.left.left):
+        node = rotate_right(node)
+
+    return node
+
+
+def is_red(node):
+    if node is None:
+        return False
+    else:
+        return node.color == True
+
+
+def rotate_left(node):
+    x = node.right
+    node.right = x.left
+    x.left = node
+    x.color = node.color
+    node.color = True
+    return x
+
+
+def rotate_right(node):
+    x = node.left
+    node.left = x.right
+    x.right = node
+    x.color = node.color
+    node.color = True
+    return x
 
 class LLRB(object):
-
-    class Node(object):
-        RED = True
-        BLACK = False
-
-        def __init__(self, value):
-            self.value = value
-            self.left = None
-            self.right = None
-            self.color = LLRB.Node.RED
-
-
-        def flip_colors(self):
-            self.color = not self.color
-            self.left.color = not self.left.color
-            self.right.color = not self.right.color
-
 
     def __init__(self):
         self.root = None
 
 
-    def search_lower(self, value):
-        """Return an item less than or equal to value.  If no such value can be found,
-        return 0.
+    def search_higher(self, value):
+        """Return the smallest item greater than or equal to value.  If no such value
+        can be found, return 0.
 
         """
         x = self.root
-        best = 0
+        best = None
         while x is not None:
             if x.value == value:
                 return value
             elif x.value < value:
-                best = max(best, x.value)
                 x = x.left
             else:
+                best = x.value if best is None else min(best, x.value)
                 x = x.right
 
-        return best
-
-
-    @staticmethod
-    def is_red(node):
-        if node is None:
-            return False
-        else:
-            return node.color == LLRB.Node.RED
-
+        return 0 if best is None else best
 
     def insert(self, value):
-        self.root = LLRB.insert_at(self.root, value)
-        self.root.color = LLRB.Node.BLACK
-
-
-    @staticmethod
-    def insert_at(node, value):
-        if node is None:
-            return LLRB.Node(value)
-
-        if LLRB.is_red(node.left) and LLRB.is_red(node.right):
-            node.flip_colors()
-
-        if node.value == value:
-            node.value = value
-        elif node.value < value:
-            node.left = LLRB.insert_at(node.left, value)
-        else:
-            node.right = LLRB.insert_at(node.right, value)
-
-
-        if LLRB.is_red(node.right) and not LLRB.is_red(node.left):
-            node = LLRB.rotate_left(node)
-        if LLRB.is_red(node.left) and LLRB.is_red(node.left.left):
-            node = LLRB.rotate_right(node)
-
-        return node
-
-
-    @staticmethod
-    def rotate_left(node):
-        x = node.right
-        node.right = x.left
-        x.left = node
-        x.color = node.color
-        node.color = LLRB.Node.RED
-        return x
-
-
-    @staticmethod
-    def rotate_right(node):
-        x = node.left
-        node.left = x.right
-        x.right = node
-        x.color = node.color
-        node.color = LLRB.Node.RED
-        return x
+        self.root = insert_at(self.root, value)
+        self.root.color = False
 
 
 class TestLLRB(unittest.TestCase):
@@ -113,9 +110,9 @@ class TestLLRB(unittest.TestCase):
         tree = LLRB()
         tree.insert(1)
         self.assertEqual(tree.root.value, 1)
-        self.assertEqual(tree.search_lower(3), 1)
-        self.assertEqual(tree.search_lower(0), 0)
-        self.assertEqual(tree.search_lower(-2), 0)
+        self.assertEqual(tree.search_higher(-2), 1)
+        self.assertEqual(tree.search_higher(0), 1)
+        self.assertEqual(tree.search_higher(3), 0)
 
 
     def test_two_elems(self):
@@ -123,12 +120,12 @@ class TestLLRB(unittest.TestCase):
         tree.insert(1)
         tree.insert(3)
         self.assertEqual(tree.root.value, 1)
-        self.assertEqual(tree.search_lower(3), 3)
-        self.assertEqual(tree.search_lower(4), 3)
-        self.assertEqual(tree.search_lower(8), 3)
-        self.assertEqual(tree.search_lower(2), 1)
-        self.assertEqual(tree.search_lower(0), 0)
-        self.assertEqual(tree.search_lower(-2), 0)
+        self.assertEqual(tree.search_higher(-2), 1)
+        self.assertEqual(tree.search_higher(0), 1)
+        self.assertEqual(tree.search_higher(2), 3)
+        self.assertEqual(tree.search_higher(3), 3)
+        self.assertEqual(tree.search_higher(4), 0)
+        self.assertEqual(tree.search_higher(8), 0)
 
 
 
@@ -137,17 +134,22 @@ class TestLLRB(unittest.TestCase):
         tree.insert(7)
         tree.insert(12)
         tree.insert(2)
-        self.assertEqual(tree.search_lower(2), 2)
-        self.assertEqual(tree.search_lower(6), 2)
-        self.assertEqual(tree.search_lower(7), 7)
-        self.assertEqual(tree.search_lower(8), 7)
-        self.assertEqual(tree.search_lower(11), 7)
-        self.assertEqual(tree.search_lower(12), 12)
-        self.assertEqual(tree.search_lower(13), 12)
+        self.assertEqual(tree.search_higher(-2), 2)
+        self.assertEqual(tree.search_higher(0), 2)
+        self.assertEqual(tree.search_higher(1), 2)
+        self.assertEqual(tree.search_higher(2), 2)
+        self.assertEqual(tree.search_higher(6), 7)
+        self.assertEqual(tree.search_higher(7), 7)
+        self.assertEqual(tree.search_higher(8), 12)
+        self.assertEqual(tree.search_higher(11), 12)
+        self.assertEqual(tree.search_higher(12), 12)
+        self.assertEqual(tree.search_higher(13), 0)
 
-        self.assertEqual(tree.search_lower(0), 0)
-        self.assertEqual(tree.search_lower(1), 0)
-        self.assertEqual(tree.search_lower(-2), 0)
+        self.assertTrue(tree.contains(2))
+        self.assertTrue(tree.contains(7))
+        self.assertTrue(tree.contains(12))
+        self.assertFalse(tree.contains(13))
+
 
 
     def test_three_elems_different_insert_order(self):
@@ -159,33 +161,29 @@ class TestLLRB(unittest.TestCase):
             for elem in permutation:
                 tree.insert(elem)
 
-            self.assertEqual(tree.search_lower(2), 2)
-            self.assertEqual(tree.search_lower(6), 2)
-            self.assertEqual(tree.search_lower(7), 7)
-            self.assertEqual(tree.search_lower(8), 7)
-            self.assertEqual(tree.search_lower(11), 7)
-            self.assertEqual(tree.search_lower(12), 12)
-            self.assertEqual(tree.search_lower(13), 12)
-
-            self.assertEqual(tree.search_lower(0), 0)
-            self.assertEqual(tree.search_lower(1), 0)
-            self.assertEqual(tree.search_lower(-2), 0)
+            self.assertEqual(tree.search_higher(-2), 2)
+            self.assertEqual(tree.search_higher(0), 2)
+            self.assertEqual(tree.search_higher(1), 2)
+            self.assertEqual(tree.search_higher(2), 2)
+            self.assertEqual(tree.search_higher(6), 7)
+            self.assertEqual(tree.search_higher(7), 7)
+            self.assertEqual(tree.search_higher(8), 12)
+            self.assertEqual(tree.search_higher(11), 12)
+            self.assertEqual(tree.search_higher(12), 12)
+            self.assertEqual(tree.search_higher(13), 0)
 
 
 def maximise(array, m):
     sums_seen = LLRB()
     sums_seen.insert(0)
-    total = 0
+    mod_running = 0
     best = 0
     for num in array:
-        total += num
-        sum_mod = total % m
-        sums_seen.insert(sum_mod)
-        if total > m:
-            sum_mod += m
-        goal = max(sum_mod - (total  % m) - 1, 0)
-        nearest_goal = sums_seen.search_lower(goal)
-        best = max(best, total % m, (sum_mod - nearest_goal) % m)
+        mod_running = (mod_running + num) % m
+        sums_seen.insert(mod_running)
+        goal = (mod_running + 1) % m
+        nearest_goal = sums_seen.search_higher(goal)
+        best = max(best, (mod_running - nearest_goal) % m)
     return best
 
 
@@ -222,14 +220,39 @@ class TestMaximise(unittest.TestCase):
         self.assertEqual(maximise([1, 1, 1, 1], 3), 2)
         self.assertEqual(maximise([1, 1, 1, 1], 4), 3)
 
+    def test_simple(self):
+        self.assertEqual(maximise([5, 4], 7), 5)
+        self.assertEqual(maximise([3, 1, 2], 7), 6)
+        self.assertEqual(maximise([1, 1, 8], 7), 3)
+
+def maximise_queue(done_queue, array, m):
+    result = maximise(array, m)
+    done_queue.put(result)
+
 
 def main():
-    num_cases = int(input())
-    for _ in range(num_cases):
-        size,mod = [int(x) for x in input().split()]
-        array = [int(x) for x in input().split()]
-        print(maximise(array, mod))
+    processes = []
+    done_queue = mp.Queue()
+
+    with FileInput("maximise_sum_input14.txt") as file:
+        num_cases = int(file.readline())
+        for order in range(num_cases):
+            size, mod = [int(x) for x in file.readline().split()]
+            array = [int(x) for x in file.readline().split()]
+            p = mp.Process(target=maximise_queue, args=(done_queue, array, mod))
+            processes.append(p)
+
+
+    for p in processes:
+        p.start()
+
+    for p in processes:
+        p.join()
+
+    while not done_queue.empty():
+        print(done_queue.get())
 
 
 if __name__ == '__main__':
     main()
+    # unittest.main()
