@@ -1,122 +1,149 @@
 # https://www.hackerrank.com/challenges/maximise-sum
+import math
+import itertools
+import random
 import unittest
 from fileinput import FileInput
 
+# http://pythonsweetness.tumblr.com/post/45227295342/fast-pypy-compatible-ordered-map-in-89-lines-of
+class SkipList(object):
+    """Doubly linked non-indexable skip list, providing logarithmic insertion
+    and deletion. Keys are any orderable Python object.
 
-class Node(object):
+        `maxsize`:
+            Maximum number of items expected to exist in the list. Performance
+            will degrade when this number is surpassed.
+    """
+    def __init__(self, maxsize=65535):
+        self.max_level = int(math.log(maxsize, 2))
+        self.level = 0
+        self.head = self._makeNode(self.max_level, None, None)
+        self.nil = self._makeNode(-1, None, None)
+        self.tail = self.nil
+        self.head[3:] = [self.nil for x in range(self.max_level)]
+        self._update = [self.head] * (1 + self.max_level)
+        self.p = 1/math.e
 
-    __slots__ = ['value', 'left', 'right', 'color']
+    def _makeNode(self, level, key, value):
+        node = [None] * (4 + level)
+        node[0] = key
+        node[1] = value
+        return node
 
-    def __init__(self, value):
-        self.value = value
-        self.left = None
-        self.right = None
-        self.color = True
+    def _randomLevel(self):
+        lvl = 0
+        max_level = min(self.max_level, self.level + 1)
+        while random.random() < self.p and lvl < max_level:
+            lvl += 1
+        return lvl
 
-
-    def flip_colors(self):
-        self.color = not self.color
-        self.left.color = not self.left.color
-        self.right.color = not self.right.color
-
-
-def insert_at(node, value):
-    if node is None:
-        return Node(value)
-
-    if is_red(node.left) and is_red(node.right):
-        node.flip_colors()
-
-    if node.value == value:
-        node.value = value
-    elif node.value < value:
-        node.left = insert_at(node.left, value)
-    else:
-        node.right = insert_at(node.right, value)
-
-
-    if is_red(node.right) and not is_red(node.left):
-        node = rotate_left(node)
-    if is_red(node.left) and is_red(node.left.left):
-        node = rotate_right(node)
-
-    return node
-
-
-def is_red(node):
-    if node is None:
-        return False
-    else:
-        return node.color == True
-
-
-def rotate_left(node):
-    x = node.right
-    node.right = x.left
-    x.left = node
-    x.color = node.color
-    node.color = True
-    return x
-
-
-def rotate_right(node):
-    x = node.left
-    node.left = x.right
-    x.right = node
-    x.color = node.color
-    node.color = True
-    return x
-
-class LLRB(object):
-
-    def __init__(self):
-        self.root = None
-
+    def items(self, searchKey=None, reverse=False):
+        """Yield (key, value) pairs starting from `searchKey`, or the next
+        greater key, or the end of the list. Subsequent iterations move
+        backwards if `reverse=True`. If `searchKey` is ``None`` then start at
+        either the beginning or end of the list."""
+        if reverse:
+            node = self.tail
+        else:
+            node = self.head[3]
+        if searchKey is not None:
+            update = self._update[:]
+            found = self._findLess(update, searchKey)
+            if found[3] is not self.nil:
+                node = found[3]
+        idx = 2 if reverse else 3
+        while node[0] is not None:
+            yield node[0], node[1]
+            node = node[idx]
 
     def search_higher(self, value):
-        """Return the smallest item greater than or equal to value.  If no such value
-        can be found, return 0.
+        result = next(self.items (value), (0, 0))[0]
+        if result < value:
+            result = 0
+        return result
 
-        """
-        x = self.root
-        best = None
-        while x is not None:
-            if x.value == value:
-                return value
-            elif x.value < value:
-                x = x.left
+    def _findLess(self, update, searchKey):
+        node = self.head
+        for i in range(self.level, -1, -1):
+            key = node[3 + i][0]
+            while key is not None and key < searchKey:
+                node = node[3 + i]
+                key = node[3 + i][0]
+            update[i] = node
+        return node
+
+    def insert(self, key):
+        self._insert(key, key)
+
+    def _insert(self, searchKey, value):
+        """Insert `searchKey` into the list with `value`. If `searchKey`
+        already exists, its previous value is overwritten."""
+        assert searchKey is not None
+        update = self._update[:]
+        node = self._findLess(update, searchKey)
+        prev = node
+        node = node[3]
+        if node[0] == searchKey:
+            node[1] = value
+        else:
+            lvl = self._randomLevel()
+            self.level = max(self.level, lvl)
+            node = self._makeNode(lvl, searchKey, value)
+            node[2] = prev
+            for i in range(0, lvl+1):
+                node[3 + i] = update[i][3 + i]
+                update[i][3 + i] = node
+            if node[3] is self.nil:
+                self.tail = node
             else:
-                best = x.value if best is None else min(best, x.value)
-                x = x.right
+                node[3][2] = node
 
-        return 0 if best is None else best
+    def delete(self, searchKey):
+        """Delete `searchKey` from the list, returning ``True`` if it
+        existed."""
+        update = self._update[:]
+        node = self._findLess(update, searchKey)
+        node = node[3]
+        if node[0] == searchKey:
+            node[3][2] = update[0]
+            for i in range(self.level + 1):
+                if update[i][3 + i] is not node:
+                    break
+                update[i][3 + i] = node[3 + i]
+            while self.level > 0 and self.head[3 + self.level][0] is None:
+                self.level -= 1
+            if self.tail is node:
+                self.tail = node[2]
+            return True
 
-    def insert(self, value):
-        self.root = insert_at(self.root, value)
-        self.root.color = False
+    def search(self, searchKey):
+        """Return the value associated with `searchKey`, or ``None`` if
+        `searchKey` does not exist."""
+        node = self.head
+        for i in range(self.level, -1, -1):
+            key = node[3 + i][0]
+            while key is not None and key < searchKey:
+                node = node[3 + i]
+                key = node[3 + i][0]
+        node = node[3]
+        if node[0] == searchKey:
+            return node[1]
 
 
-class TestLLRB(unittest.TestCase):
-
-    def test_empty(self):
-        tree = LLRB()
-        self.assertIsNone(tree.root)
-
+class TestSkipList(unittest.TestCase):
 
     def test_single_elem(self):
-        tree = LLRB()
+        tree = SkipList()
         tree.insert(1)
-        self.assertEqual(tree.root.value, 1)
         self.assertEqual(tree.search_higher(-2), 1)
         self.assertEqual(tree.search_higher(0), 1)
         self.assertEqual(tree.search_higher(3), 0)
 
 
     def test_two_elems(self):
-        tree = LLRB()
+        tree = SkipList()
         tree.insert(1)
         tree.insert(3)
-        self.assertEqual(tree.root.value, 1)
         self.assertEqual(tree.search_higher(-2), 1)
         self.assertEqual(tree.search_higher(0), 1)
         self.assertEqual(tree.search_higher(2), 3)
@@ -127,7 +154,7 @@ class TestLLRB(unittest.TestCase):
 
 
     def test_three_elems(self):
-        tree = LLRB()
+        tree = SkipList()
         tree.insert(7)
         tree.insert(12)
         tree.insert(2)
@@ -142,19 +169,12 @@ class TestLLRB(unittest.TestCase):
         self.assertEqual(tree.search_higher(12), 12)
         self.assertEqual(tree.search_higher(13), 0)
 
-        self.assertTrue(tree.contains(2))
-        self.assertTrue(tree.contains(7))
-        self.assertTrue(tree.contains(12))
-        self.assertFalse(tree.contains(13))
-
-
-
     def test_three_elems_different_insert_order(self):
-        tree = LLRB()
+        tree = SkipList()
         elements = [7, 12, 2]
 
         for permutation in itertools.permutations(elements):
-            tree = LLRB()
+            tree = SkipList()
             for elem in permutation:
                 tree.insert(elem)
 
@@ -171,7 +191,7 @@ class TestLLRB(unittest.TestCase):
 
 
 def maximise(array, m):
-    sums_seen = LLRB()
+    sums_seen = SkipList(maxsize=10**14)
     sums_seen.insert(0)
     mod_running = 0
     best = 0
@@ -224,7 +244,7 @@ class TestMaximise(unittest.TestCase):
 
 
 def main():
-    with FileInput("-") as file:
+    with FileInput("maximise_sum_input14.txt") as file:
         num_cases = int(file.readline())
         for _ in range(num_cases):
             size, mod = [int(x) for x in file.readline().split()]
@@ -234,4 +254,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    # unittest.main()
