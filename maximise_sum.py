@@ -1,7 +1,4 @@
 # https://www.hackerrank.com/challenges/maximise-sum
-import itertools
-import multiprocessing as mp
-import sys
 import unittest
 from fileinput import FileInput
 
@@ -225,32 +222,14 @@ class TestMaximise(unittest.TestCase):
         self.assertEqual(maximise([3, 1, 2], 7), 6)
         self.assertEqual(maximise([1, 1, 8], 7), 3)
 
-def maximise_queue(done_queue, array, m):
-    result = maximise(array, m)
-    done_queue.put(result)
-
 
 def main():
-    processes = []
-    done_queue = mp.Queue()
-
-    with FileInput("maximise_sum_input14.txt") as file:
+    with FileInput("-") as file:
         num_cases = int(file.readline())
-        for order in range(num_cases):
+        for _ in range(num_cases):
             size, mod = [int(x) for x in file.readline().split()]
             array = [int(x) for x in file.readline().split()]
-            p = mp.Process(target=maximise_queue, args=(done_queue, array, mod))
-            processes.append(p)
-
-
-    for p in processes:
-        p.start()
-
-    for p in processes:
-        p.join()
-
-    while not done_queue.empty():
-        print(done_queue.get())
+            print(maximise(array, mod))
 
 
 if __name__ == '__main__':
