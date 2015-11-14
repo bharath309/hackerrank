@@ -6,6 +6,7 @@ import unittest
 # Profiling
 # Baseline: 64.1s
 # Without head and tail properties: 59.0s
+# without next and dropwhile: 11.067s
 
 
 class SkipNode(object):
@@ -16,11 +17,10 @@ class SkipNode(object):
         self.nxt = nxt
 
 
-TAIL_MAX = -2*31
 class SkipList(object):
 
     def __init__(self):
-        self.tail = SkipNode(2**32 - 1, [])
+        self.tail = SkipNode(2**63 - 1, [])
         self.head = SkipNode(-2**31, [self.tail])
 
 
@@ -30,23 +30,16 @@ class SkipList(object):
             yield node
             node = node.nxt[level]
 
-    def _scan(self, search_data, update):
+    def find_lower(self, search_data, update):
         height = len(self.head.nxt)
         node = self.head
-        # # print("SCANNING")
-        # self.pprint()
-        # print("  Scanning for {}".format(search_data))
         for level in range(height - 1, -1, -1):
-            # print("  Level {}".format(level))
-            # print("    at node {}".format(node.data))
-
             next_node = node.nxt[level]
 
             while next_node.data < search_data:
                 node = next_node
                 next_node = node.nxt[level]
 
-                # print("    at node {}".format(node.data))
             update[level] = node
 
         return node
@@ -54,10 +47,9 @@ class SkipList(object):
     def insert(self, data):
         """Inserts data into appropriate position."""
 
-        # print("INSERTING")
         # Maybe optimize, by only adding one new level.
         update = [None] * len(self.head.nxt)
-        node = self._scan(data, update)
+        node = self.find_lower(data, update)
 
 
         # if node's height is greater than number of levels
@@ -65,28 +57,22 @@ class SkipList(object):
         height = len(self.head.nxt)
 
         node_height = np_geometric(p=0.5)
-        # print("  node_height: {}".format(node_height))
-        # import ipdb; ipdb.set_trace()
+
         # optimize if more levels
         update.extend([self.head for _ in range(height, node_height)])
-
 
         self.head.nxt.extend([self.tail for _ in range(height, node_height)])
 
         new_node = SkipNode(data, nxt=[update[l].nxt[l] for l in range(node_height)])
+
         for level in range(node_height):
             update[level].nxt[level] = new_node
 
     def ceiling(self, data):
         """Returns the least element greater than or equal to `elem`, or 0 if no such
 element exists."""
-
-        # optimize self.level
-
-
-        # self.pprint()
         _update = [None] * len(self.head.nxt)
-        node = self._scan(data, _update)
+        node = self.find_lower(data, _update)
 
         nxt = node.nxt[0]
         if nxt is not self.tail:
