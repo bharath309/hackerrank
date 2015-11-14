@@ -9,23 +9,19 @@ import unittest
 
 
 class SkipNode(object):
-    __slots__ = ('data', 'nxt', 'prev')
+    __slots__ = ('data', 'nxt')
 
-    def __init__(self, data, nxt, prev):
+    def __init__(self, data, nxt):
         self.data = data
         self.nxt = nxt
-        self.prev = prev
 
-        for level in range(len(prev)):
-            prev[level].nxt[level] = self.nxt[level].prev[level] = self
 
+TAIL_MAX = -2*31
 class SkipList(object):
 
     def __init__(self):
-
-        self.tail = SkipNode(2**32 - 1, [], [])
-        self.head = SkipNode(-2**31, [self.tail], [])
-        self.tail.prev.extend([self.head])
+        self.tail = SkipNode(2**32 - 1, [])
+        self.head = SkipNode(-2**31, [self.tail])
 
 
     def _level(self, start=None, level=0):
@@ -36,36 +32,68 @@ class SkipList(object):
 
     def _scan(self, search_data, update):
         height = len(self.head.nxt)
-        update = [self.head] * height
-        # start = self.head.nxt[-1]
         node = self.head
-        # print("SCANNING")
-        # print("  Scanning {}".format(self))
+        # # print("SCANNING")
+        # self.pprint()
+        # print("  Scanning for {}".format(search_data))
         for level in range(height - 1, -1, -1):
             # print("  Level {}".format(level))
-            node_data = node.data
-            while node_data < search_data:
-                # print("  at Node {}".format(node.data))
-                node = node.nxt[level]
-                node_data = node.data
+            # print("    at node {}".format(node.data))
+
+            next_node = node.nxt[level]
+
+            while next_node.data < search_data:
+                node = next_node
+                next_node = node.nxt[level]
+
+                # print("    at node {}".format(node.data))
             update[level] = node
 
         return node
 
+    def insert(self, data):
+        """Inserts data into appropriate position."""
+
+        # print("INSERTING")
+        # Maybe optimize, by only adding one new level.
+        update = [None] * len(self.head.nxt)
+        node = self._scan(data, update)
+
+
+        # if node's height is greater than number of levels
+        # then add new levels, if not do nothing
+        height = len(self.head.nxt)
+
+        node_height = np_geometric(p=0.5)
+        # print("  node_height: {}".format(node_height))
+        # import ipdb; ipdb.set_trace()
+        # optimize if more levels
+        update.extend([self.head for _ in range(height, node_height)])
+
+
+        self.head.nxt.extend([self.tail for _ in range(height, node_height)])
+
+        new_node = SkipNode(data, nxt=[update[l].nxt[l] for l in range(node_height)])
+        for level in range(node_height):
+            update[level].nxt[level] = new_node
+
     def ceiling(self, data):
         """Returns the least element greater than or equal to `elem`, or 0 if no such
 element exists."""
+
+        # optimize self.level
+
+
+        # self.pprint()
         _update = [None] * len(self.head.nxt)
         node = self._scan(data, _update)
 
-        if node:
-            return data
-
-        result = update[0].nxt[0]
-        if result is self.tail:
-            return 0
+        nxt = node.nxt[0]
+        if nxt is not self.tail:
+            return nxt.data
         else:
-            return result.data
+            return 0
+
 
     def pprint(self):
         max_height = len(self.head.nxt)
@@ -73,9 +101,9 @@ element exists."""
         pic_height = max_height * 2 + 1
         skip_pic = [''] * pic_height
 
-        all_nodes = chain([SkipNode('HEAD', self.head.nxt, [])],
+        all_nodes = chain([SkipNode('HEAD', self.head.nxt)],
                           list(self._level()),
-                          [SkipNode("TAIL", self.tail.prev, [])]
+                          [SkipNode("TAIL", self.head.nxt)]
                           )
 
         for node in all_nodes:
@@ -111,32 +139,6 @@ element exists."""
             print(row)
 
 
-    def insert(self, data):
-        """Inserts data into appropriate position."""
-
-        node_height = np_geometric(p=0.5)
-        # Maybe optimize, by only adding one new level.
-        update = [self.head for _ in range(max(node_height, len(self.head.nxt)))]
-        node = self._scan(data, update)
-        # print("INSERTING")
-        # print("  inserting after {}".format(node.data))
-
-        # if node's height is greater than number of levels
-        # then add new levels, if not do nothing
-        height = len(self.head.nxt)
-
-        update.extend([self.head for _ in range(height, node_height)])
-
-        self.head.nxt.extend([self.tail for _ in range(height, node_height)])
-
-        self.tail.prev.extend([self.head for _ in range(height, node_height)])
-
-        new_node = SkipNode(data,
-                            nxt=[update[l].nxt[l] for l in range(node_height)],
-                            prev=[update[l] for l in range(node_height)])
-
-        for level in range(node_height):
-            update[level].nxt[level] = new_node
 
 
     def __str__(self):
@@ -151,58 +153,58 @@ class TestSkipList(unittest.TestCase):
         tree = SkipList()
         tree.insert(1)
         self.assertEqual(tree.ceiling(-2), 1)
-        # self.assertEqual(tree.ceiling(0), 1)
-        # self.assertEqual(tree.ceiling(3), 0)
+        self.assertEqual(tree.ceiling(0), 1)
+        self.assertEqual(tree.ceiling(3), 0)
 
 
-    # def test_two_elems(self):
-    #     tree = SkipList()
-    #     tree.insert(1)
-    #     tree.insert(3)
-    #     self.assertEqual(tree.ceiling(-2), 1)
-    #     self.assertEqual(tree.ceiling(0), 1)
-    #     self.assertEqual(tree.ceiling(2), 3)
-    #     self.assertEqual(tree.ceiling(3), 3)
-    #     self.assertEqual(tree.ceiling(4), 0)
-    #     self.assertEqual(tree.ceiling(8), 0)
+    def test_two_elems(self):
+        tree = SkipList()
+        tree.insert(1)
+        tree.insert(3)
+        self.assertEqual(tree.ceiling(-2), 1)
+        self.assertEqual(tree.ceiling(0), 1)
+        self.assertEqual(tree.ceiling(2), 3)
+        self.assertEqual(tree.ceiling(3), 3)
+        self.assertEqual(tree.ceiling(4), 0)
+        self.assertEqual(tree.ceiling(8), 0)
 
 
 
-    # def test_three_elems(self):
-    #     tree = SkipList()
-    #     tree.insert(7)
-    #     tree.insert(12)
-    #     tree.insert(2)
-    #     self.assertEqual(tree.ceiling(-2), 2)
-    #     self.assertEqual(tree.ceiling(0), 2)
-    #     self.assertEqual(tree.ceiling(1), 2)
-    #     self.assertEqual(tree.ceiling(2), 2)
-    #     self.assertEqual(tree.ceiling(6), 7)
-    #     self.assertEqual(tree.ceiling(7), 7)
-    #     self.assertEqual(tree.ceiling(8), 12)
-    #     self.assertEqual(tree.ceiling(11), 12)
-    #     self.assertEqual(tree.ceiling(12), 12)
-    #     self.assertEqual(tree.ceiling(13), 0)
+    def test_three_elems(self):
+        tree = SkipList()
+        tree.insert(7)
+        tree.insert(12)
+        tree.insert(2)
+        self.assertEqual(tree.ceiling(-2), 2)
+        self.assertEqual(tree.ceiling(0), 2)
+        self.assertEqual(tree.ceiling(1), 2)
+        self.assertEqual(tree.ceiling(2), 2)
+        self.assertEqual(tree.ceiling(6), 7)
+        self.assertEqual(tree.ceiling(7), 7)
+        self.assertEqual(tree.ceiling(8), 12)
+        self.assertEqual(tree.ceiling(11), 12)
+        self.assertEqual(tree.ceiling(12), 12)
+        self.assertEqual(tree.ceiling(13), 0)
 
-    # def test_three_elems_different_insert_order(self):
-    #     tree = SkipList()
-    #     elements = [7, 12, 2]
+    def test_three_elems_different_insert_order(self):
+        tree = SkipList()
+        elements = [7, 12, 2]
 
-    #     for permutation in permutations(elements):
-    #         tree = SkipList()
-    #         for elem in permutation:
-    #             tree.insert(elem)
+        for permutation in permutations(elements):
+            tree = SkipList()
+            for elem in permutation:
+                tree.insert(elem)
 
-    #         self.assertEqual(tree.ceiling(-2), 2)
-    #         self.assertEqual(tree.ceiling(0), 2)
-    #         self.assertEqual(tree.ceiling(1), 2)
-    #         self.assertEqual(tree.ceiling(2), 2)
-    #         self.assertEqual(tree.ceiling(6), 7)
-    #         self.assertEqual(tree.ceiling(7), 7)
-    #         self.assertEqual(tree.ceiling(8), 12)
-    #         self.assertEqual(tree.ceiling(11), 12)
-    #         self.assertEqual(tree.ceiling(12), 12)
-    #         self.assertEqual(tree.ceiling(13), 0)
+            self.assertEqual(tree.ceiling(-2), 2)
+            self.assertEqual(tree.ceiling(0), 2)
+            self.assertEqual(tree.ceiling(1), 2)
+            self.assertEqual(tree.ceiling(2), 2)
+            self.assertEqual(tree.ceiling(6), 7)
+            self.assertEqual(tree.ceiling(7), 7)
+            self.assertEqual(tree.ceiling(8), 12)
+            self.assertEqual(tree.ceiling(11), 12)
+            self.assertEqual(tree.ceiling(12), 12)
+            self.assertEqual(tree.ceiling(13), 0)
 
 
 if __name__ == '__main__':
