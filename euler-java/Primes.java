@@ -35,11 +35,11 @@ public final class Primes {
     }
 
 
-    public static long[] sievePrimesUpTo(long n) {
+    public static long[] sievePrimesUpTo(int n) {
         BitSet isPrime = new BitSet(n + 1);
         isPrime.set(2, isPrime.size());
 
-        long limit = (long) Math.sqrt(n) + 1;
+        int limit = (int) Math.sqrt(n) + 1;
         for (int i = 2; i <= limit; i++) {
             if (isPrime.get(i)) {
                 for (int j = i * i; j <= n; j += i) {
@@ -55,7 +55,7 @@ public final class Primes {
             }
         }
 
-        long[] primes = new long[numPrimes];
+        int[] primes = new int[numPrimes];
         int primeIndex = 0;
         for (int i = 2; i < isPrime.size(); i++) {
             if (isPrime.get(i)){
